@@ -2,7 +2,6 @@ require_relative 'throttler'
 require_relative 'signature_validator'
 
 module StraightServer
-
   class OrdersController
     include Goliath::Constants
 
@@ -17,10 +16,9 @@ module StraightServer
     end
 
     def create
-
       unless @gateway
-        StraightServer.logger.warn "Gateway not found"
-        return [404, {}, "Gateway not found" ]
+        StraightServer.logger.warn 'Gateway not found'
+        return [404, {}, 'Gateway not found']
       end
 
       if @gateway.check_signature
@@ -29,7 +27,7 @@ module StraightServer
         ip = @env['HTTP_X_FORWARDED_FOR'].to_s
         ip = @env['REMOTE_ADDR'] if ip.empty?
         if StraightServer::Throttler.new(@gateway.id).deny?(ip)
-          StraightServer.logger.warn message = "Too many requests, please try again later"
+          StraightServer.logger.warn message = 'Too many requests, please try again later'
           return [429, {}, message]
         end
       end
@@ -39,7 +37,7 @@ module StraightServer
         # This is to inform users of previous version of a deprecated param
         # It will have to be removed at some point.
         if @params['order_id']
-          return [409, {}, "Error: order_id is no longer a valid param. Use keychain_id instead and consult the documentation." ]
+          return [409, {}, 'Error: order_id is no longer a valid param. Use keychain_id instead and consult the documentation.']
         end
 
         order_data = {
@@ -63,24 +61,23 @@ module StraightServer
         [200, {}, add_callback_data_warning(order).to_json]
       rescue Sequel::ValidationFailed => e
         StraightServer.logger.warn(
-          "VALIDATION ERRORS in order, cannot create it:\n" +
-          "#{e.message.split(",").each_with_index.map { |e,i| "#{i+1}. #{e.lstrip}"}.join("\n") }\n" +
+          "VALIDATION ERRORS in order, cannot create it:\n" \
+          "#{e.message.split(',').each_with_index.map { |e, i| "#{i + 1}. #{e.lstrip}" }.join("\n")}\n" \
           "Order data: #{order_data.inspect}\n"
         )
-        [409, {}, "Invalid order: #{e.message}" ]
+        [409, {}, "Invalid order: #{e.message}"]
       rescue Straight::Gateway::OrderAmountInvalid => e
-        [409, {}, "Invalid order: #{e.message}" ]
+        [409, {}, "Invalid order: #{e.message}"]
       rescue StraightServer::GatewayModule::GatewayInactive
-        StraightServer.logger.warn message = "The gateway is inactive, you cannot create order with it"
-        [503, {}, message ]
+        StraightServer.logger.warn message = 'The gateway is inactive, you cannot create order with it'
+        [503, {}, message]
       end
     end
 
     def show
-
       unless @gateway
-        StraightServer.logger.warn "Gateway not found"
-        return [404, {}, "Gateway not found" ]
+        StraightServer.logger.warn 'Gateway not found'
+        return [404, {}, 'Gateway not found']
       end
 
       if @gateway.check_signature
@@ -97,24 +94,23 @@ module StraightServer
     end
 
     def websocket
-
       order = find_order
       if order
         begin
           @gateway.add_websocket_for_order ws = Faye::WebSocket.new(@env), order
           ws.rack_response
         rescue Gateway::WebsocketExists
-          [403, {}, "Someone is already listening to that order"]
+          [403, {}, 'Someone is already listening to that order']
         rescue Gateway::WebsocketForCompletedOrder
-          [403, {}, "You cannot listen to this order because it is completed (status > 1)"]
+          [403, {}, 'You cannot listen to this order because it is completed (status > 1)']
         end
       end
     end
 
     def cancel
       unless @gateway
-        StraightServer.logger.warn "Gateway not found"
-        return [404, {}, "Gateway not found"]
+        StraightServer.logger.warn 'Gateway not found'
+        return [404, {}, 'Gateway not found']
       end
 
       if @gateway.check_signature
@@ -128,73 +124,70 @@ module StraightServer
           order.cancel
           [200, {}, '']
         else
-          [409, {}, "Order is not cancelable"]
+          [409, {}, 'Order is not cancelable']
         end
       end
     end
 
     def last_keychain_id
       unless @gateway
-        StraightServer.logger.warn "Gateway not foun"
-        return [404, {}, "Gateway not found"]
+        StraightServer.logger.warn 'Gateway not foun'
+        return [404, {}, 'Gateway not found']
       end
 
-      [200, {}, {gateway_id: @gateway.id, last_keychain_id: @gateway.last_keychain_id}.to_json]
+      [200, {}, { gateway_id: @gateway.id, last_keychain_id: @gateway.last_keychain_id }.to_json]
     end
 
     private
 
-      # Refactoring proposed: https://github.com/AlexanderPavlenko/straight-server/commit/49ea6e3732a9564c04d8dfecaee6d0ebaa462042
-      def dispatch
+    # Refactoring proposed: https://github.com/AlexanderPavlenko/straight-server/commit/49ea6e3732a9564c04d8dfecaee6d0ebaa462042
+    def dispatch
+      StraightServer.logger.blank_lines
+      StraightServer.logger.info "#{@method} #{@env['REQUEST_PATH']}\n#{@params}"
 
-        StraightServer.logger.blank_lines
-        StraightServer.logger.info "#{@method} #{@env['REQUEST_PATH']}\n#{@params}"
+      @gateway = StraightServer::Gateway.find_by_hashed_id(@request_path[1])
 
-        @gateway = StraightServer::Gateway.find_by_hashed_id(@request_path[1])
-
-        @response = begin
-          if @request_path[3] # if an order id is supplied
-            @params['id'] = @request_path[3]
-            @params['id'] = @params['id'].to_i if @params['id'] =~ /\A\d+\Z/
-            if @request_path[4] == 'websocket'
-              websocket
-            elsif @request_path[4] == 'cancel'&& @method == 'POST'
-              cancel
-            elsif @request_path[4].nil? && @method == 'GET'
-              show
-            end
-          elsif @request_path[2] == 'last_keychain_id'
-            last_keychain_id
-          elsif @request_path[3].nil?# && @method == 'POST'
-            create
+      @response = begin
+        if @request_path[3] # if an order id is supplied
+          @params['id'] = @request_path[3]
+          @params['id'] = @params['id'].to_i if @params['id'] =~ /\A\d+\Z/
+          if @request_path[4] == 'websocket'
+            websocket
+          elsif @request_path[4] == 'cancel' && @method == 'POST'
+            cancel
+          elsif @request_path[4].nil? && @method == 'GET'
+            show
           end
-        rescue StraightServer::SignatureValidator::InvalidNonce
-          StraightServer.logger.warn message = "X-Nonce is invalid: #{@env["#{HTTP_PREFIX}X_NONCE"].inspect}"
-          [409, {}, message]
-        rescue StraightServer::SignatureValidator::InvalidSignature
-          StraightServer.logger.warn message = "X-Signature is invalid: #{@env["#{HTTP_PREFIX}X_SIGNATURE"].inspect}"
-          [409, {}, message]
+        elsif @request_path[2] == 'last_keychain_id'
+          last_keychain_id
+        elsif @request_path[3].nil? # && @method == 'POST'
+          create
         end
-
-        @response = [404, {}, "#{@method} /#{@request_path.join('/')} Not found"] if @response.nil?
+      rescue StraightServer::SignatureValidator::InvalidNonce
+        StraightServer.logger.warn message = "X-Nonce is invalid: #{@env["#{HTTP_PREFIX}X_NONCE"].inspect}"
+        [409, {}, message]
+      rescue StraightServer::SignatureValidator::InvalidSignature
+        StraightServer.logger.warn message = "X-Signature is invalid: #{@env["#{HTTP_PREFIX}X_SIGNATURE"].inspect}"
+        [409, {}, message]
       end
 
-      def find_order
-        if @params['id'] =~ /[^\d]+/
-          Order[:payment_id => @params['id']]
-        else
-          Order[@params['id']]
-        end
-      end
+      @response = [404, {}, "#{@method} /#{@request_path.join('/')} Not found"] if @response.nil?
+    end
 
-      def add_callback_data_warning(order)
-        o = order.to_h
-        if @params['data'].kind_of?(String) && @params['callback_data'].nil?
-          o[:WARNING] = "Maybe you meant to use callback_data? The API has changed now. Consult the documentation."
-        end
-        o
+    def find_order
+      if @params['id'] =~ /[^\d]+/
+        Order[payment_id: @params['id']]
+      else
+        Order[@params['id']]
       end
+    end
 
+    def add_callback_data_warning(order)
+      o = order.to_h
+      if @params['data'].is_a?(String) && @params['callback_data'].nil?
+        o[:WARNING] = 'Maybe you meant to use callback_data? The API has changed now. Consult the documentation.'
+      end
+      o
+    end
   end
-
 end

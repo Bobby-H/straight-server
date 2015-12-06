@@ -27,8 +27,8 @@ require_relative '../lib/straight-server/order'
 
 require_relative 'support/custom_matchers'
 
-require "factory_girl"
-require_relative "factories"
+require 'factory_girl'
+require_relative 'factories'
 
 require 'webmock/rspec'
 
@@ -39,22 +39,21 @@ require 'webmock/rspec'
 class StraightServer::Thread
   def self.new(label: nil, &block)
     block.call
-    {label: label}
+    { label: label }
   end
 end
 
 RSpec.configure do |config|
-
   config.include FactoryGirl::Syntax::Methods
 
   config.before(:suite) do
-    StraightServer.db_connection = DB #use a memory DB
+    StraightServer.db_connection = DB # use a memory DB
   end
 
-  config.before(:each) do |spec|
+  config.before(:each) do |_spec|
     # puts spec.description
     DB[:orders].delete
-    logger_mock = double("logger mock")
+    logger_mock = double('logger mock')
     [:debug, :info, :warn, :fatal, :unknown, :blank_lines].each do |e|
       allow(logger_mock).to receive(e)
     end
@@ -71,13 +70,11 @@ RSpec.configure do |config|
     Redis.current.keys("#{StraightServer::Config.redis[:prefix]}*").each do |k|
       Redis.current.del k
     end
-
   end
 
   config.after(:all) do
-    ["default_last_keychain_id", "second_gateway_last_keychain_id", "default_order_counters.yml"].each do |f|
-      FileUtils.rm "#{ENV['HOME']}/.straight/#{f}" if File.exists?("#{ENV['HOME']}/.straight/#{f}")
+    ['default_last_keychain_id', 'second_gateway_last_keychain_id', 'default_order_counters.yml'].each do |f|
+      FileUtils.rm "#{ENV['HOME']}/.straight/#{f}" if File.exist?("#{ENV['HOME']}/.straight/#{f}")
     end
   end
-
 end

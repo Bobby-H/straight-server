@@ -1,55 +1,52 @@
 require 'cgi'
 
 module StraightServer
-
   # This module contains common features of Gateway, later to be included
   # in one of the classes below.
   module GatewayModule
-
     @@websockets = {}
 
-    class CallbackUrlBadResponse     < StraightServerError; end
-    class WebsocketExists            < StraightServerError; end
+    class CallbackUrlBadResponse < StraightServerError; end
+    class WebsocketExists < StraightServerError; end
     class WebsocketForCompletedOrder < StraightServerError; end
-    class GatewayInactive            < StraightServerError; end
-    class NoBlockchainAdapters       < StraightServerError
+    class GatewayInactive < StraightServerError; end
+    class NoBlockchainAdapters < StraightServerError
       def message
-        "No blockchain adapters were found! StraightServer cannot query the blockchain.\n" +
-        "Check your ~/.straight/config.yml file and make sure valid blockchain adapters\n" +
-        "are present."
+        "No blockchain adapters were found! StraightServer cannot query the blockchain.\n" \
+        "Check your ~/.straight/config.yml file and make sure valid blockchain adapters\n" \
+        'are present.'
       end
     end
-    class NoWebsocketsForNewGateway  < StraightServerError
+    class NoWebsocketsForNewGateway < StraightServerError
       def message
         "You're trying to get access to websockets on a Gateway that hasn't been saved yet"
       end
     end
-    class OrderCountersDisabled      < StraightServerError
+    class OrderCountersDisabled < StraightServerError
       def message
-        "Please enable order counting in config file! You can do is using the following option:\n\n" +
-        "  count_orders: true\n\n" +
-        "and don't forget to provide Redis connection info by adding this to the config file as well:\n\n" +
-        "  redis:\n" +
-        "    host: localhost\n" +
-        "    port: 6379\n" +
+        "Please enable order counting in config file! You can do is using the following option:\n\n" \
+        "  count_orders: true\n\n" \
+        "and don't forget to provide Redis connection info by adding this to the config file as well:\n\n" \
+        "  redis:\n" \
+        "    host: localhost\n" \
+        "    port: 6379\n" \
         "    db:   null\n"
       end
     end
     class NoPubkey < StraightServerError
       def message
-        "No public key were found! Gateway can't work without it.\n" +
-        "Please provide it in config file or DB."
+        "No public key were found! Gateway can't work without it.\n" \
+        'Please provide it in config file or DB.'
       end
     end
     class NoTestPubkey < StraightServerError
       def message
-        "No test public key were found! Gateway can't work in test mode without it.\n" +
-        "Please provide it in config file or DB."
+        "No test public key were found! Gateway can't work in test mode without it.\n" \
+        'Please provide it in config file or DB.'
       end
     end
 
     CALLBACK_URL_ATTEMPT_TIMEFRAME = 3600 # seconds
-
 
     ############# Initializers methods ########################################################
     # We have separate methods, because with GatewayOnDB they are called from #after_initialize
@@ -58,8 +55,8 @@ module StraightServer
     #
     def initialize_exchange_rate_adapters
       @exchange_rate_adapters ||= []
-      if self.exchange_rate_adapter_names.kind_of?(Array) && self.exchange_rate_adapter_names
-        self.exchange_rate_adapter_names.each do |adapter|
+      if exchange_rate_adapter_names.is_a?(Array) && exchange_rate_adapter_names
+        exchange_rate_adapter_names.each do |adapter|
           begin
             @exchange_rate_adapters << Straight::ExchangeRate.const_get("#{adapter}Adapter").instance
           rescue NameError => e
@@ -72,18 +69,25 @@ module StraightServer
     def initialize_blockchain_adapters
       @blockchain_adapters = []
       StraightServer::Config.blockchain_adapters.each do |a|
-
         adapter = Straight::Blockchain.const_get("#{a}Adapter")
         next unless adapter
         begin
-          main_url = StraightServer::Config.__send__("#{a.downcase}_url") rescue next
-          test_url = StraightServer::Config.__send__("#{a.downcase}_test_url") rescue nil
+          main_url = begin
+                       StraightServer::Config.__send__("#{a.downcase}_url")
+                     rescue
+                       next
+                     end
+          test_url = begin
+                       StraightServer::Config.__send__("#{a.downcase}_test_url")
+                     rescue
+                       nil
+                     end
           @blockchain_adapters << adapter.mainnet_adapter(main_url: main_url, test_url: test_url)
         rescue ArgumentError
           @blockchain_adapters << adapter.mainnet_adapter
         end
       end
-      raise NoBlockchainAdapters if @blockchain_adapters.empty?
+      fail NoBlockchainAdapters if @blockchain_adapters.empty?
     end
 
     def initialize_callbacks
@@ -120,9 +124,8 @@ module StraightServer
 
     # Creates a new order and saves into the DB. Checks if the MD5 hash
     # is correct first.
-    def create_order(attrs={})
-
-      raise GatewayInactive unless self.active
+    def create_order(attrs = {})
+      fail GatewayInactive unless active
 
       StraightServer.logger.info "Creating new order with attrs: #{attrs}"
 
@@ -133,40 +136,40 @@ module StraightServer
         attrs[:keychain_id] = reused_order.keychain_id
 
       end
-      
+
       attrs[:keychain_id] = nil if attrs[:keychain_id] == ''
 
-        order = new_order(
-          amount:           (attrs[:amount] && attrs[:amount].to_f),
-          keychain_id:      attrs[:keychain_id] || get_next_last_keychain_id,
-          currency:         attrs[:currency],
-          btc_denomination: attrs[:btc_denomination]
-        )
-        order.id            = attrs[:id].to_i       if attrs[:id]
-        order.data          = attrs[:data]          if attrs[:data]
-        order.callback_data = attrs[:callback_data] if attrs[:callback_data]
-        order.title         = attrs[:title]         if attrs[:title]
-        order.callback_url  = attrs[:callback_url]  if attrs[:callback_url]
-        order.gateway       = self
-        order.test_mode     = test_mode
-        order.description   = attrs[:description]
-        order.reused        = reused_order.reused + 1 if reused_order
-        order.save
+      order = new_order(
+        amount:           (attrs[:amount] && attrs[:amount].to_f),
+        keychain_id:      attrs[:keychain_id] || get_next_last_keychain_id,
+        currency:         attrs[:currency],
+        btc_denomination: attrs[:btc_denomination]
+      )
+      order.id            = attrs[:id].to_i       if attrs[:id]
+      order.data          = attrs[:data]          if attrs[:data]
+      order.callback_data = attrs[:callback_data] if attrs[:callback_data]
+      order.title         = attrs[:title]         if attrs[:title]
+      order.callback_url  = attrs[:callback_url]  if attrs[:callback_url]
+      order.gateway       = self
+      order.test_mode     = test_mode
+      order.description   = attrs[:description]
+      order.reused        = reused_order.reused + 1 if reused_order
+      order.save
 
-      self.update_last_keychain_id(attrs[:keychain_id]) unless order.reused > 0
-      self.save
+      update_last_keychain_id(attrs[:keychain_id]) unless order.reused > 0
+      save
       StraightServer.logger.info "Order #{order.id} created: #{order.to_h}"
       order
     end
 
     def get_next_last_keychain_id
-      return self.test_last_keychain_id + 1 if self.test_mode
-      self.last_keychain_id + 1
+      return test_last_keychain_id + 1 if test_mode
+      last_keychain_id + 1
     end
 
     # TODO: make it preaty
-    def update_last_keychain_id(new_value=nil)
-      if self.test_mode
+    def update_last_keychain_id(new_value = nil)
+      if test_mode
         new_value ? self.test_last_keychain_id = new_value : self.test_last_keychain_id += 1
       else
         new_value ? self.last_keychain_id = new_value : self.last_keychain_id += 1
@@ -174,10 +177,10 @@ module StraightServer
     end
 
     def add_websocket_for_order(ws, order)
-      raise WebsocketExists            unless websockets[order.id].nil?
-      raise WebsocketForCompletedOrder unless order.status < 2
+      fail WebsocketExists            unless websockets[order.id].nil?
+      fail WebsocketForCompletedOrder unless order.status < 2
       StraightServer.logger.info "Opening ws connection for #{order.id}"
-      ws.on(:close) do |event|
+      ws.on(:close) do |_event|
         websockets.delete(order.id)
         StraightServer.logger.info "Closing ws connection for #{order.id}"
       end
@@ -186,8 +189,8 @@ module StraightServer
     end
 
     def websockets
-      raise NoWebsocketsForNewGateway unless self.id
-      @@websockets[self.id]
+      fail NoWebsocketsForNewGateway unless id
+      @@websockets[id]
     end
 
     def send_order_to_websocket_client(order)
@@ -200,7 +203,7 @@ module StraightServer
     def sign_with_secret(content, level: 1)
       result = content.to_s
       level.times do
-        result = OpenSSL::HMAC.digest('sha256', secret, result).unpack("H*").first
+        result = OpenSSL::HMAC.digest('sha256', secret, result).unpack('H*').first
       end
       result
     end
@@ -223,17 +226,17 @@ module StraightServer
         underpaid:   get_order_counter(:underpaid),
         overpaid:    get_order_counter(:overpaid),
         expired:     get_order_counter(:expired),
-        canceled:    get_order_counter(:canceled),
+        canceled:    get_order_counter(:canceled)
       }
     end
 
     def get_order_counter(counter_name)
-      raise OrderCountersDisabled unless StraightServer::Config.count_orders
+      fail OrderCountersDisabled unless StraightServer::Config.count_orders
       StraightServer.redis_connection.get("#{StraightServer::Config.redis[:prefix]}:gateway_#{id}:#{counter_name}_orders_counter").to_i || 0
     end
 
-    def increment_order_counter!(counter_name, by=1)
-      raise OrderCountersDisabled unless StraightServer::Config.count_orders
+    def increment_order_counter!(counter_name, by = 1)
+      fail OrderCountersDisabled unless StraightServer::Config.count_orders
       StraightServer.redis_connection.incrby("#{StraightServer::Config.redis[:prefix]}:gateway_#{id}:#{counter_name}_orders_counter", by)
     end
 
@@ -250,7 +253,7 @@ module StraightServer
     def find_reusable_order
       expired_orders = find_expired_orders_row
       if expired_orders.size >= Config.reuse_address_orders_threshold &&
-      fetch_transactions_for(expired_orders.last.address).empty?
+         fetch_transactions_for(expired_orders.last.address).empty?
         return expired_orders.last
       end
       nil
@@ -258,104 +261,99 @@ module StraightServer
 
     private
 
-      # Tries to send a callback HTTP request to the resource specified
-      # in the #callback_url. Use #callback_url given to Order if it exist, otherwise default.
-      # If it fails for any reason, it keeps trying for an hour (3600 seconds)
-      # making 10 http requests, each delayed by twice the time the previous one was delayed.
-      # This method is supposed to be running in a separate thread.
-      def send_callback_http_request(order, delay: 5)
-        url = order.callback_url || self.callback_url
-        return if url.to_s.empty?
+    # Tries to send a callback HTTP request to the resource specified
+    # in the #callback_url. Use #callback_url given to Order if it exist, otherwise default.
+    # If it fails for any reason, it keeps trying for an hour (3600 seconds)
+    # making 10 http requests, each delayed by twice the time the previous one was delayed.
+    # This method is supposed to be running in a separate thread.
+    def send_callback_http_request(order, delay: 5)
+      url = order.callback_url || callback_url
+      return if url.to_s.empty?
 
-        # Composing the request uri here
-        callback_data = order.callback_data ? "&callback_data=#{CGI.escape(order.callback_data)}" : ''
-        uri           = URI.parse("#{url}#{url.include?('?') ? '&' : '?'}#{order.to_http_params}#{callback_data}")
+      # Composing the request uri here
+      callback_data = order.callback_data ? "&callback_data=#{CGI.escape(order.callback_data)}" : ''
+      uri           = URI.parse("#{url}#{url.include?('?') ? '&' : '?'}#{order.to_http_params}#{callback_data}")
 
-        StraightServer.logger.info "Attempting callback for order #{order.id}: #{uri.to_s}"
+      StraightServer.logger.info "Attempting callback for order #{order.id}: #{uri}"
 
-        begin
-          request = Net::HTTP::Get.new(uri.request_uri)
-          request.add_field 'X-Signature', SignatureValidator.signature(method: 'GET', request_uri: uri.request_uri, secret: secret, nonce: nil, body: nil)
-          response = Net::HTTP.new(uri.host, uri.port).start do |http|
-            http.request request
+      begin
+        request = Net::HTTP::Get.new(uri.request_uri)
+        request.add_field 'X-Signature', SignatureValidator.signature(method: 'GET', request_uri: uri.request_uri, secret: secret, nonce: nil, body: nil)
+        response = Net::HTTP.new(uri.host, uri.port).start do |http|
+          http.request request
+        end
+        order.callback_response = { code: response.code, body: response.body }
+        order.save
+        fail CallbackUrlBadResponse unless response.code.to_i == 200
+      rescue => ex
+        if delay < CALLBACK_URL_ATTEMPT_TIMEFRAME
+          sleep(delay)
+          send_callback_http_request(order, delay: delay * 2)
+        else
+          StraightServer.logger.warn "Callback request for order #{order.id} failed with #{ex.inspect}, see order's #callback_response field for details"
+        end
+      end
+
+      StraightServer.logger.info "Callback request for order #{order.id} performed successfully"
+    end
+
+    # Wallets that support BIP32 do a limited address lookup. If you have 20 empty addresses in a row
+    # (actually not 20, but Config.reuse_address_orders_threshold, 20 is the default value) it won't
+    # look past it and if an order is generated with the 21st address and Bitcoins are paid there,
+    # the wallet may not detect it. Thus we need to always check for the number of expired orders
+    # in a row and reuse an address.
+    #
+    # This method takes care of the first part of that equation: finds the row of expired orders.
+    # It works like this:
+    #
+    # 1. Finds 20 last orders
+    # 2. Checks if they form a row of expired orders, that is if there is no non-expired non-new orders
+    # in the array:
+    #
+    #   if YES (all orders in the row are indeed expired)
+    #     a) Try the next 20 until we find that one non-expired, non-new order
+    #     b) Put all orders in an array, then slice it so only the oldest 20 are there
+    #     c) return 20 oldest expired orders
+    #
+    #   if NO (some orders are paid)
+    #     Return the row of expired orders - which is not enough to trigger a reuse
+    #     (the triger is in the #find_reusable_order method, which calls this one).
+    def find_expired_orders_row
+      orders = []
+      row    = nil
+      offset = 0
+
+      while row.nil? || row.size > 0
+        row = Order.where(gateway_id: id).order(Sequel.desc(:keychain_id), Sequel.desc(:reused)).limit(Config.reuse_address_orders_threshold).offset(offset).to_a
+
+        row.reject! do |o|
+          reject = false
+          row.each do |o2|
+            reject = true if o.keychain_id == o2.keychain_id && o.reused < o2.reused
           end
-          order.callback_response = { code: response.code, body: response.body }
-          order.save
-          raise CallbackUrlBadResponse unless response.code.to_i == 200
-        rescue => ex
-          if delay < CALLBACK_URL_ATTEMPT_TIMEFRAME
-            sleep(delay)
-            send_callback_http_request(order, delay: delay*2)
+          reject
+        end
+
+        row.sort! { |o1, o2| o2.id <=> o1.id }
+
+        row.each do |o|
+          if o.status == Order::STATUSES[:expired]
+            orders.unshift(o)
+          elsif o.status == Order::STATUSES[:new]
+            next
           else
-            StraightServer.logger.warn "Callback request for order #{order.id} failed with #{ex.inspect}, see order's #callback_response field for details"
+            return orders[0...Config.reuse_address_orders_threshold]
           end
         end
-
-        StraightServer.logger.info "Callback request for order #{order.id} performed successfully"
+        offset += Config.reuse_address_orders_threshold
       end
 
-
-      # Wallets that support BIP32 do a limited address lookup. If you have 20 empty addresses in a row
-      # (actually not 20, but Config.reuse_address_orders_threshold, 20 is the default value) it won't
-      # look past it and if an order is generated with the 21st address and Bitcoins are paid there,
-      # the wallet may not detect it. Thus we need to always check for the number of expired orders
-      # in a row and reuse an address.
-      #
-      # This method takes care of the first part of that equation: finds the row of expired orders.
-      # It works like this:
-      #
-      # 1. Finds 20 last orders
-      # 2. Checks if they form a row of expired orders, that is if there is no non-expired non-new orders
-      # in the array:
-      #
-      #   if YES (all orders in the row are indeed expired)
-      #     a) Try the next 20 until we find that one non-expired, non-new order
-      #     b) Put all orders in an array, then slice it so only the oldest 20 are there
-      #     c) return 20 oldest expired orders
-      #
-      #   if NO (some orders are paid)
-      #     Return the row of expired orders - which is not enough to trigger a reuse
-      #     (the triger is in the #find_reusable_order method, which calls this one).
-      def find_expired_orders_row
-
-        orders = []
-        row    = nil
-        offset = 0
-
-        while row.nil? || row.size > 0
-          row = Order.where(gateway_id: self.id).order(Sequel.desc(:keychain_id), Sequel.desc(:reused)).limit(Config.reuse_address_orders_threshold).offset(offset).to_a
-
-          row.reject! do |o|
-            reject = false
-            row.each do |o2|
-              reject = true if o.keychain_id == o2.keychain_id && o.reused < o2.reused
-            end
-            reject
-          end
-
-          row.sort! { |o1, o2| o2.id <=> o1.id }
-
-          row.each do |o|
-            if o.status == Order::STATUSES[:expired]
-              orders.unshift(o)
-            elsif o.status == Order::STATUSES[:new]
-              next
-            else
-              return orders[0...Config.reuse_address_orders_threshold]
-            end
-          end
-          offset += Config.reuse_address_orders_threshold
-        end
-
-        orders
-
-      end
-
+      orders
+    end
   end
 
   # Uses database to load and save attributes
   class GatewayOnDB < Sequel::Model(:gateways)
-
     include Straight::GatewayModule
     include GatewayModule
     plugin :timestamps, create: :created_at, update: :updated_at
@@ -363,7 +361,7 @@ module StraightServer
     plugin :after_initialize
 
     def self.find_by_hashed_id(s)
-      self.where(hashed_id: s).first
+      where(hashed_id: s).first
     end
 
     # This virtual attribute is important because it's difficult to detect whether secret was actually
@@ -386,13 +384,13 @@ module StraightServer
     end
 
     def after_create
-      @@websockets[self.id] = {}
-      update(hashed_id: OpenSSL::HMAC.digest('sha256', Config.server_secret, self.id.to_s).unpack("H*").first)
+      @@websockets[id] = {}
+      update(hashed_id: OpenSSL::HMAC.digest('sha256', Config.server_secret, id.to_s).unpack('H*').first)
     end
 
     def after_initialize
       @status_check_schedule = Straight::GatewayModule::DEFAULT_STATUS_CHECK_SCHEDULE
-      @@websockets[self.id] ||= {} if self.id
+      @@websockets[id] ||= {} if id
       initialize_callbacks
       initialize_exchange_rate_adapters
       initialize_blockchain_adapters
@@ -402,8 +400,8 @@ module StraightServer
 
     def validate
       super
-      errors.add(:pubkey, "Please provide public key") if pubkey_missing?
-      errors.add(:test_pubkey, "Please provide test public key if you activate test mode") if test_pubkey_missing?
+      errors.add(:pubkey, 'Please provide public key') if pubkey_missing?
+      errors.add(:test_pubkey, 'Please provide test public key if you activate test mode') if test_pubkey_missing?
     end
 
     # We cannot allow to store gateway secret in a DB plaintext, this would be completetly unsecure.
@@ -422,14 +420,14 @@ module StraightServer
     end
 
     def encrypt_secret
-      cipher           = OpenSSL::Cipher::AES.new(128, :CBC)
+      cipher = OpenSSL::Cipher::AES.new(128, :CBC)
       cipher.encrypt
-      cipher.key       = OpenSSL::HMAC.digest('sha256', 'nonce', Config.server_secret).unpack("H*").first[0,16]
+      cipher.key       = OpenSSL::HMAC.digest('sha256', 'nonce', Config.server_secret).unpack('H*').first[0, 16]
 
-      cipher.iv        = iv = OpenSSL::HMAC.digest('sha256', 'nonce', "#{self.class.max(:id)}#{Config.server_secret}").unpack("H*").first[0,16]
-      raise "cipher.iv cannot be nil" unless iv
+      cipher.iv        = iv = OpenSSL::HMAC.digest('sha256', 'nonce', "#{self.class.max(:id)}#{Config.server_secret}").unpack('H*').first[0, 16]
+      fail 'cipher.iv cannot be nil' unless iv
 
-      encrypted        = cipher.update(self[:secret]) << cipher.final()
+      encrypted        = cipher.update(self[:secret]) << cipher.final
       base64_encrypted = Base64.strict_encode64(encrypted).encode('utf-8')
       result           = "#{iv}:#{base64_encrypted}"
 
@@ -438,7 +436,7 @@ module StraightServer
       if decrypt_secret(result) == self[:secret]
         self.secret = result
       else
-        raise "Decrypted and original secrets don't match! Cannot proceed with writing the encrypted gateway secret."
+        fail "Decrypted and original secrets don't match! Cannot proceed with writing the encrypted gateway secret."
       end
     end
 
@@ -462,21 +460,19 @@ module StraightServer
 
     private
 
-      def decrypt_secret(encrypted_field=self[:secret])
-        decipher      = OpenSSL::Cipher::AES.new(128, :CBC)
-        iv, encrypted = encrypted_field.split(':')
-        decipher.decrypt
-        decipher.key  = OpenSSL::HMAC.digest('sha256', 'nonce', Config.server_secret).unpack("H*").first[0,16]
-        decipher.iv   = iv
-        decipher.update(Base64.decode64(encrypted)) + decipher.final
-      end
-
+    def decrypt_secret(encrypted_field = self[:secret])
+      decipher      = OpenSSL::Cipher::AES.new(128, :CBC)
+      iv, encrypted = encrypted_field.split(':')
+      decipher.decrypt
+      decipher.key  = OpenSSL::HMAC.digest('sha256', 'nonce', Config.server_secret).unpack('H*').first[0, 16]
+      decipher.iv   = iv
+      decipher.update(Base64.decode64(encrypted)) + decipher.final
+    end
   end
 
   # Uses a config file to load attributes and a special _last_keychain_id file
   # to store last_keychain_id
   class GatewayOnConfig
-
     include Straight::GatewayModule
     include GatewayModule
 
@@ -513,7 +509,7 @@ module StraightServer
     attr_accessor :active
 
     def self.find_by_hashed_id(s)
-      self.find_by_id(s)
+      find_by_id(s)
     end
 
     def initialize
@@ -525,8 +521,8 @@ module StraightServer
     end
 
     def validate_config
-      raise NoPubkey if pubkey_missing?
-      raise NoTestPubkey if test_pubkey_missing?
+      fail NoPubkey if pubkey_missing?
+      fail NoTestPubkey if test_pubkey_missing?
     end
 
     # Because this is a config based gateway, we only save last_keychain_id
@@ -540,7 +536,7 @@ module StraightServer
     # we save it to the file.
     def load_last_keychain_id!
       @last_keychain_id_file ||= build_keychain_path
-      if File.exists?(@last_keychain_id_file)
+      if File.exist?(@last_keychain_id_file)
         self.last_keychain_id = File.read(@last_keychain_id_file).to_i
       else
         self.last_keychain_id = 0
@@ -550,7 +546,7 @@ module StraightServer
 
     def save_last_keychain_id!
       @last_keychain_id_file ||= build_keychain_path
-      File.open(@last_keychain_id_file, 'w') {|f| f.write(last_keychain_id) }
+      File.open(@last_keychain_id_file, 'w') { |f| f.write(last_keychain_id) }
     end
 
     def build_keychain_path
@@ -569,7 +565,7 @@ module StraightServer
     # This method is a replacement for the Sequel's model one used in DB version of the gateway
     # and it finds gateways using the index of @@gateways Array.
     def self.find_by_id(id)
-      @@gateways[id.to_i-1]
+      @@gateways[id.to_i - 1]
     end
 
     # This will later be used in the #find_by_id. Because we don't use a DB,
@@ -581,7 +577,7 @@ module StraightServer
     i = 0
     StraightServer::Config.gateways.each do |name, attrs|
       i += 1
-      gateway = self.new
+      gateway = new
       gateway.pubkey                         = attrs['pubkey']
       gateway.test_pubkey                    = attrs['test_pubkey']
       gateway.confirmations_required         = attrs['confirmations_required'].to_i
@@ -592,7 +588,7 @@ module StraightServer
       gateway.default_currency               = attrs['default_currency']
       gateway.orders_expiration_period       = attrs['orders_expiration_period']
       gateway.active                         = attrs['active']
-      gateway.address_provider               = attrs['address_provider'] || "Bip32"
+      gateway.address_provider               = attrs['address_provider'] || 'Bip32'
       gateway.address_derivation_scheme      = attrs['address_derivation_scheme']
       gateway.test_mode                      = attrs['test_mode'] || false
       gateway.name                     = name
@@ -604,7 +600,6 @@ module StraightServer
       @@websockets[i] = {}
       @@gateways << gateway
     end if StraightServer::Config.gateways
-
   end
 
   # It may not be a perfect way to implement such a thing, but it gives enough flexibility to people
@@ -612,9 +607,8 @@ module StraightServer
   # in a config file instead of a DB. That way they don't need special tools to access the DB and create
   # a gateway, but can simply edit the config file.
   Gateway = if StraightServer::Config.gateways_source == 'config'
-    GatewayOnConfig
-  else
-    GatewayOnDB
+              GatewayOnConfig
+            else
+              GatewayOnDB
   end
-
 end

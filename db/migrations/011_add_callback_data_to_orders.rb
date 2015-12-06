@@ -1,5 +1,4 @@
 Sequel.migration do
-
   up do
     add_column :orders, :callback_data, String
   end
@@ -7,5 +6,4 @@ Sequel.migration do
   down do
     drop_column :orders, :callback_data
   end
-
 end

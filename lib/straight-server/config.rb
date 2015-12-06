@@ -1,7 +1,6 @@
 require 'ostruct'
 
 module StraightServer
-
   # :db
   # :gateways_source
   # :gateways
@@ -20,9 +19,9 @@ module StraightServer
   class << (Config = OpenStruct.new)
     def [](key_chain)
       key_chain = key_chain.to_s.split('.')
-      config    = self.public_send(key_chain.shift)
+      config    = public_send(key_chain.shift)
       key_chain.each do |key|
-        if config.kind_of?(Hash)
+        if config.is_a?(Hash)
           config = config[key] || config[key.to_sym]
         else
           return

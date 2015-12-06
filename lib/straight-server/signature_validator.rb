@@ -17,8 +17,8 @@ module StraightServer
     end
 
     def validate!
-      raise InvalidNonce unless valid_nonce?
-      raise InvalidSignature unless valid_signature?
+      fail InvalidNonce unless valid_nonce?
+      fail InvalidSignature unless valid_signature?
       true
     end
 
@@ -52,10 +52,10 @@ module StraightServer
     def signature
       self.class.signature(
         nonce:       env["#{HTTP_PREFIX}X_NONCE"],
-        body:        env[RACK_INPUT].kind_of?(StringIO) ? env[RACK_INPUT].string : env[RACK_INPUT].to_s,
+        body:        env[RACK_INPUT].is_a?(StringIO) ? env[RACK_INPUT].string : env[RACK_INPUT].to_s,
         method:      env[REQUEST_METHOD],
         request_uri: env[REQUEST_URI],
-        secret:      gateway.secret,
+        secret:      gateway.secret
       )
     end
 

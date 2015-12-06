@@ -1,13 +1,12 @@
 module StraightServer
   class Thread
-
     def self.new(label: nil, &block)
       thread         = ::Thread.new(&block)
       thread[:label] = label
       thread
     end
 
-    INTERRUPTION_FLAG = lambda { |label| "#{Config[:'redis.prefix']}:interrupt_thread:#{label}" }
+    INTERRUPTION_FLAG = ->(label) { "#{Config[:'redis.prefix']}:interrupt_thread:#{label}" }
 
     def self.interrupt(label:)
       redis = StraightServer.redis_connection

@@ -11,7 +11,6 @@ require 'faye/websocket'
 Sequel.extension :migration
 
 module StraightServer
-
   VERSION = File.read(File.expand_path('../', File.dirname(__FILE__)) + '/VERSION')
 
   StraightServerError = Class.new(StandardError)
@@ -19,7 +18,6 @@ module StraightServer
   class << self
     attr_accessor :db_connection, :redis_connection, :logger
   end
-
 end
 
 require_relative 'straight-server/utils/hash_string_to_sym_keys'

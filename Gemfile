@@ -1,5 +1,5 @@
 source 'https://rubygems.org' do
-  gem 'straight', '1.0.0' #, path: '../straight-engine'
+  gem 'straight', '1.0.0' # , path: '../straight-engine'
   gem 'satoshi-unit'
   gem 'goliath'
   gem 'faye-websocket'
@@ -13,7 +13,7 @@ end
 
 unless ENV['STRAIGHT_SERVER_IGNORE_ADDONS_GEMFILE'] # use this flag when building straight-server.gemspec
   addons_gemfile = File.join(ENV['STRAIGHT_SERVER_CONFIG_DIR'] || File.join(ENV['HOME'], '.straight'), 'AddonsGemfile')
-  eval_gemfile addons_gemfile if File.exists?(addons_gemfile)
+  eval_gemfile addons_gemfile if File.exist?(addons_gemfile)
 end
 
 group :development do

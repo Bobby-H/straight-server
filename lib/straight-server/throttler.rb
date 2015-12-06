@@ -1,6 +1,5 @@
 module StraightServer
   class Throttler
-
     def initialize(gateway_id)
       @id              = "gateway_#{gateway_id}"
       @redis           = StraightServer.redis_connection

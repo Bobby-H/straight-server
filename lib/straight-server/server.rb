@@ -1,6 +1,5 @@
 module StraightServer
   class Server < Goliath::API
-
     use Goliath::Rack::Params
     include StraightServer::Initializer
     Faye::WebSocket.load_adapter('goliath')
@@ -20,8 +19,8 @@ module StraightServer
       # Goliath server. If don't do that, there will be an exception saying "unrecognized argument".
       # In reality, we make use of --config-dir value in the in StraightServer::Initializer and stored
       # it in StraightServer::Initializer.config_dir property.
-      opts.on('-c', '--config-dir STRING', "Directory where config files and addons are placed") do |val|
-        options[:config_dir] = File.expand_path(val || ENV['HOME'] + '/.straight' )
+      opts.on('-c', '--config-dir STRING', 'Directory where config files and addons are placed') do |val|
+        options[:config_dir] = File.expand_path(val || ENV['HOME'] + '/.straight')
       end
     end
 
@@ -34,7 +33,6 @@ module StraightServer
       # just checks that the path starts with /gateways/:id/orders
 
       StraightServer.logger.watch_exceptions do
-
         # If the process is daemonized, we get Sequel::DatabaseDisconnectError with Postgres.
         # The explanation is here: https://github.com/thuehlinger/daemons/issues/31
         # Until I figure out where to call connect_to_db so that it connects to the DB
@@ -45,12 +43,10 @@ module StraightServer
           connect_to_db
           return process_request(env)
         end
-
       end
 
       # Assume things went wrong, if they didn't go right
       [500, {}, "#{env['REQUEST_METHOD']} #{env['REQUEST_PATH']} Server Error"]
-
     end
 
     # This is a separate method now because of the need to rescue Sequel::DatabaseDisconnectError
@@ -71,8 +67,7 @@ module StraightServer
         return action.call(env) if env['REQUEST_PATH'] =~ path
       end
       # no block was called, means no route matched. Let's render 404
-      return [404, {}, "#{env['REQUEST_METHOD']} #{env['REQUEST_PATH']} Not found"]
+      [404, {}, "#{env['REQUEST_METHOD']} #{env['REQUEST_PATH']} Not found"]
     end
-
   end
 end

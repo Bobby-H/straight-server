@@ -2,10 +2,9 @@ require 'spec_helper'
 require 'timecop'
 
 RSpec.describe StraightServer::Throttler do
-
   it 'throttles requests' do
     new_config          = StraightServer::Config.clone
-    new_config.throttle = {requests_limit: 1, period: 1}
+    new_config.throttle = { requests_limit: 1, period: 1 }
     stub_const 'StraightServer::Config', new_config
     throttler1 = described_class.new(1)
     throttler2 = described_class.new(2)
@@ -30,7 +29,7 @@ RSpec.describe StraightServer::Throttler do
 
   it 'bans by ip' do
     new_config          = StraightServer::Config.clone
-    new_config.throttle = {requests_limit: 3, period: 1, ip_ban_duration: 30}
+    new_config.throttle = { requests_limit: 3, period: 1, ip_ban_duration: 30 }
     stub_const 'StraightServer::Config', new_config
     throttler1 = described_class.new(1)
     throttler2 = described_class.new(2)

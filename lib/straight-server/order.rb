@@ -1,7 +1,5 @@
 module StraightServer
-
   class Order < Sequel::Model
-
     include Straight::OrderModule
     plugin :validation_helpers
     plugin :timestamps, create: :created_at, update: :updated_at
@@ -49,12 +47,12 @@ module StraightServer
     # set StraightServer::Config.check_order_status_in_db_first to true
     def status(as_sym: false, reload: false)
       if reload && StraightServer::Config.check_order_status_in_db_first
-        @old_status = self.status
-        self.refresh
+        @old_status = status
+        refresh
         unless self[:status] == @old_status
           @status         = self[:status]
           @status_changed = true
-          self.gateway.order_status_changed(self)
+          gateway.order_status_changed(self)
         end
       end
       self[:status] = @status
@@ -76,12 +74,12 @@ module StraightServer
     end
 
     def to_h
-      super.merge({ id: id,
-                    payment_id: payment_id,
-                    amount_in_btc: amount_in_btc(as: :string),
-                    amount_paid_in_btc: amount_in_btc(field: amount_paid,as: :string),
-                    keychain_id: keychain_id,
-                    last_keychain_id: self.gateway.last_keychain_id })
+      super.merge(id: id,
+                  payment_id: payment_id,
+                  amount_in_btc: amount_in_btc(as: :string),
+                  amount_paid_in_btc: amount_in_btc(field: amount_paid, as: :string),
+                  keychain_id: keychain_id,
+                  last_keychain_id: gateway.last_keychain_id)
     end
 
     def to_json
@@ -90,12 +88,12 @@ module StraightServer
 
     def validate
       super # calling Sequel::Model validator
-      errors.add(:amount,      "is not numeric") if !amount.kind_of?(Numeric)
-      errors.add(:amount,      "should be more than 0") if amount && amount <= 0
-      errors.add(:amount_paid, "is not numeric") if !amount.kind_of?(Numeric)
-      errors.add(:gateway_id,  "is invalid") if !gateway_id.kind_of?(Numeric) || gateway_id <= 0
-      errors.add(:description, "should be shorter than 256 characters") if description.kind_of?(String) && description.length > 255
-      errors.add(:gateway,     "is inactive, cannot create order for inactive gateway") if !gateway.active && self.new?
+      errors.add(:amount,      'is not numeric') unless amount.is_a?(Numeric)
+      errors.add(:amount,      'should be more than 0') if amount && amount <= 0
+      errors.add(:amount_paid, 'is not numeric') unless amount.is_a?(Numeric)
+      errors.add(:gateway_id,  'is invalid') if !gateway_id.is_a?(Numeric) || gateway_id <= 0
+      errors.add(:description, 'should be shorter than 256 characters') if description.is_a?(String) && description.length > 255
+      errors.add(:gateway,     'is inactive, cannot create order for inactive gateway') if !gateway.active && self.new?
       validates_unique :id
       validates_presence [:address, :keychain_id, :gateway_id, :amount]
     end
@@ -105,12 +103,12 @@ module StraightServer
     end
 
     def before_create
-      self.payment_id = gateway.sign_with_secret("#{keychain_id}#{amount}#{created_at}#{(Order.max(:id) || 0)+1}")
+      self.payment_id = gateway.sign_with_secret("#{keychain_id}#{amount}#{created_at}#{(Order.max(:id) || 0) + 1}")
 
       # Save info about current exchange rate at the time of purchase
       unless gateway.default_currency == 'BTC'
-        self.data = {} unless self.data
-        self.data[:exchange_rate] = { price: gateway.current_exchange_rate, currency: gateway.default_currency }
+        self.data = {} unless data
+        data[:exchange_rate] = { price: gateway.current_exchange_rate, currency: gateway.default_currency }
       end
 
       super
@@ -121,7 +119,7 @@ module StraightServer
     # but the initial :new increment needs this code because the Gateway#order_status_changed
     # isn't called in this case.
     def after_create
-      self.gateway.increment_order_counter!(:new) if StraightServer::Config.count_orders
+      gateway.increment_order_counter!(:new) if StraightServer::Config.count_orders
     end
 
     # Reloads the method in Straight engine. We need to take
@@ -133,23 +131,21 @@ module StraightServer
         StraightServer.logger.info "Starting periodic status checks of order #{id} (expires in #{t} seconds)"
         check_status_on_schedule(duration: t)
       end
-      self.save if self.status_changed?
+      save if self.status_changed?
     end
 
     def check_status_on_schedule(period: 10, iteration_index: 0, duration: 600, time_passed: 0)
       if StraightServer::Thread.interrupted?(thread: ::Thread.current)
-        StraightServer.logger.info "Checking status of order #{self.id} interrupted"
+        StraightServer.logger.info "Checking status of order #{id} interrupted"
         return
       end
-      StraightServer.logger.info "Checking status of order #{self.id}"
+      StraightServer.logger.info "Checking status of order #{id}"
       super
     end
 
     def time_left_before_expiration
       time_passed_after_creation = (Time.now - created_at).to_i
-      gateway.orders_expiration_period+(StraightServer::Config.expiration_overtime || 0) - time_passed_after_creation
+      gateway.orders_expiration_period + (StraightServer::Config.expiration_overtime || 0) - time_passed_after_creation
     end
-
   end
-
 end
